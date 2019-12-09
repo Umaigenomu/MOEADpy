@@ -1,4 +1,5 @@
 import numpy as np
+import components
 
 
 class _AliasDict(dict):
@@ -16,12 +17,21 @@ aliases = _AliasDict({
 })
 
 
+def invoke(component, method: str, *args, **kwargs):
+    try:
+        f = getattr(component, aliases[method])
+    except AttributeError:
+        raise AttributeError(
+            f"The method '{method}' is not included in '{component}'. "
+            "Please re-check your spelling.")
+    return f(*args, **kwargs)
+
+
 class Moead:
-    def __init__(self,  # preset=None,     #  Set of strategy/components
+    def __init__(self,
                  decomp=("sld", 99),  # decomposition strategy
                  scalarization="wt",  # scalar aggregation function
-                 # neighborhood assignment strategy
-                 neighborhood=("lambda", 20, 1),
+                 neighborhood=("lambda", 20, 1),  # neighborhood assignment
                  variation=None,  # variation operators
                  update=None,  # update method
                  constraint=None,  # constraint handling method
@@ -43,13 +53,13 @@ class Moead:
         self.seed = seed
         pass
 
-    def set_problem():
+    def set_problem(problem):
 
         pass
 
     def compute():
         # 1. Generate initial population and weights
-
+        
         # 2. Define or update neighborhoods
         # 3. Copy incumbent the solution in preparation for the new one
         # 4. Variation operators
