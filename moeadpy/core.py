@@ -1,5 +1,6 @@
 import numpy as np
-import components
+from sklearn.neighbors import NearestNeighbors
+from . import components
 
 
 class _AliasDict(dict):
@@ -12,12 +13,12 @@ class _AliasDict(dict):
 
 
 aliases = _AliasDict({
-    "simplex lattice design;Simplex-Lattice Design": "sld",
+    "simplex lattice design;Simplex-Lattice Design": "Sld",
 
 })
 
 
-def invoke(component, method: str, *args, **kwargs):
+def _invoke(component, method: str, *args, **kwargs):
     try:
         f = getattr(component, aliases[method])
     except AttributeError:
@@ -27,44 +28,143 @@ def invoke(component, method: str, *args, **kwargs):
     return f(*args, **kwargs)
 
 
+def _generate_rand_population(n_rows, prob_dim):
+    return np.random.rand(n_rows, prob_dim)
+
+
+def _denormalize_pop(pop, lower_limit, value_range):
+    return lower_limit + (pop * value_range)
+
+
 class Moead:
     def __init__(self,
-                 decomp=("sld", 99),  # decomposition strategy
-                 scalarization="wt",  # scalar aggregation function
-                 neighborhood=("lambda", 20, 1),  # neighborhood assignment
-                 variation=None,  # variation operators
-                 update=None,  # update method
+                 problem,
+                 n_objectives,
+                 x_min,
+                 x_max,
+                 decomp=components.decomposition.Sld(
+                     h=99),  # decomposition strategy
+                 neighborhood=components.neighboorhood.TNearestNeighbors(
+                     T=20, delta_prob=1),  # neighborhood assignment
+                 variation=(components.variation.SimulatedBinaryCrossover(
+                     eta=20, pc=1, eps=0.000001), components.variation.PolynomialMutation(
+                     eta=20, prob_m="n"), components.variation.ApplyMaxMin(min=0, max=1)),
+                 solution_scaling=None,
+                 scalarization=components.scalarization.WeightedTchebycheff(),  # scalar aggregation function
                  constraint=None,  # constraint handling method
-                 scaling=None,  # objective scaling strategy
-                 terminantion=None,  # stop criteria
-                 showpars=None,  # echoing behavior
+                 update=None,  # update method
+                 stop_criteria=None,  # stop criteria
                  seed=None,       # Seed for PRNG
                  ):
-        self.problem = None
+        self.problem = problem
+        self.n_objectives = n_objectives
+
+        self.x_min = x_min
+        self.x_max = x_max
+        self._lower_limit = None
+        self._upper_limit = None
+        self._value_range = None
+
+        if len(x_max) != len(x_min):
+            raise ValueError("'x_max' and 'x_min' don't share the same length."
+                             " Please re-check your parameters.")
+        self.solution_length = len(x_max)
+
         self.decomp = decomp
         self.scalarization = scalarization
         self.neighborhood = neighborhood
         self.variation = variation
         self.update = update
         self.constraint = constraint
-        self.scaling = scaling
-        self.terminantion = terminantion
-        self.showpars = showpars
+        self.solution_scaling = solution_scaling
+        self.stop_criteria = stop_criteria
         self.seed = seed
-        pass
+        self.results = None
 
-    def set_problem(problem):
+    def _set_lower_upper_limits(self, n_rows):
+        self._lower_limit = np.tile(self.x_min, (n_rows, 1))
+        self._upper_limit = np.tile(self.x_max, (n_rows, 1))
+        self._value_range = self._upper_limit - self._lower_limit
 
-        pass
+    def evaluate_solutions(self, population):
+        '''
+        returns: matrix =>
+                    columns -> each subproblem
+                    rows -> each candidate solution
+        '''
+        if not self._lower_limit:
+            self._set_lower_upper_limits(population.shape[0])
+        denorm_pop = _denormalize_pop(
+            population, self._lower_limit, self._value_range)
+        eva: np.ndarray = None
+        try:
+            iter(self.problem)  # check if it's a list of problems
+        except TypeError:
+            try:
+                # eva = np.array([self.problem(indiv, weights)
+                #                 for indiv, weights in zip(denorm_pop, weight_matrix)])
+                eva = np.array(self.problem(denorm_pop))
+            except TypeError:
+                raise TypeError(
+                    "This moead object's 'problem'(s) is either not an array-like of callable(s) or just simply wrong!")
+        else:
+            eva = np.array([[f(indiv) for f in self.problem] for indiv in denorm_pop])
+        return eva
 
-    def compute():
-        # 1. Generate initial population and weights
-        
+    def compute(self):
+        # 1. Generate initial population, weights, and evaluations
+        weights: np.ndarray = self.decomp(self.n_objectives)
+        population_size = weights.shape[0]
+        self._set_lower_upper_limits(population_size)
+
+        population = _generate_rand_population(
+            population_size, self.solution_length)
+
+        stop = False
+        iteration = 0
+        while not stop:
+            iteration += 1
+            eva = self.evaluate_solutions(population)
         # 2. Define or update neighborhoods
-        # 3. Copy incumbent the solution in preparation for the new one
+            neighb: np.ndarray = None
+            if self.neighborhood.mode == "weights":
+                neighb = self.neighborhood(weights, iter)
+            else:
+                neighb = self.neighborhood(population, iter)
+        # 3. Copy the incumbent solution in preparation for the new one
+            new_population = np.array(population)
         # 4. Variation operators
-        # 5. Aggregation functions
-        # 6. Constraints
+            for variator in self.variation:
+                if isinstance(variator, components.variation.Crossover):
+                    new_population = variator(
+                        new_population, self.neighborhood)
+                else:
+                    new_population = variator(new_population)
+        # 5. Re-evaluation and scalar aggregation functions
+            old_eva = eva
+            eva = self.evaluate_solutions(new_population)
+            combined_eva = np.concatenate((old_eva, eva), axis=0)
+
+            min_points = np.min(combined_eva, axis=0)  # ideal points
+            max_points = np.max(combined_eva, axis=0)  # nadir points
+
+            flattened_neighborhood_ind = neighb.flatten() # len = neigh.shape[0] * neigh.shape[1]
+            neighborhood_evaluations = eva[flattened_neighborhood_ind]
+            # Replicate each weight vector T (neighborhood size) times
+            replicated_weights = np.repeat(weights, neighb.shape[1], axis=0)
+            # neighborhood_evaluations.shape == replicated_weights.shape
+
+            Z_neigh = self.scalarization(neighborhood_evaluations, replicated_weights, min_points, max_points)
+            Z_neigh = Z_neigh.reshape((neighb.shape[0], neighb.shape[1]))
+            Z_old_eva = self.scalarization(old_eva, weights, min_points, max_points)  # len = neighb.shape[0]
+            Z_old_eva = Z_old_eva.reshape((1, len(Z_old_eva))).T
+            # Z_full.shape = (neighb.shape[0], neighb.shape[1] + 1)
+            # => coefficients for all the evaluation matrices made above
+            Z_full = np.concatenate((Z_neigh, Z_old_eva), axis=1)
+        # 6. Constraints and index ordering
+            Z_sort_ind = np.argsort(Z_full, axis=1)  # shape's the same as Z_full; indexes
         # 7. Update
+            
         # 8. Termination check
+            pass
         pass
