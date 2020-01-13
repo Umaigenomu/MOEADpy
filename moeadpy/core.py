@@ -1,8 +1,9 @@
 import numpy as np
-from .components import \
+import logging
+from components import \
     constraints, \
     decomposition, \
-    neighboorhood, \
+    neighborhood, \
     scalarization, \
     stopping, \
     update, \
@@ -44,7 +45,7 @@ class Moead:
                  x_min: np.ndarray,
                  x_max: np.ndarray,
                  decomp=decomposition.Sld(h=99),
-                 neighborhood=neighboorhood.TNearestNeighbors(
+                 neighborhood=neighborhood.TNearestNeighbors(
                      T=20, delta_prob=1),
                  variation=(
                      variation.SimulatedBinaryCrossover(eta=20, pc=1),
@@ -93,7 +94,7 @@ class Moead:
                     columns -> each subproblem
                     rows -> each candidate solution
         '''
-        if not self._lower_limit:
+        if self._lower_limit is None:
             self._set_lower_upper_limits(population.shape[0])
         denorm_pop = _denormalize_pop(
             population, self._lower_limit, self._value_range)
@@ -124,6 +125,11 @@ class Moead:
         population = np.random.rand(population_size, self.solution_length)
 
         new_eva = self.evaluate_solutions(population, self.constraint)
+        if new_eva.shape[1] != self.n_objectives:
+            logging.warn(f"User defined 'n_objectives' and the actual number of objectives inferred from the problem "
+                          "differ. Changing n_objectives to {new_eva.shape[1]} and regenerating weights.")
+            self.n_objectives = new_eva.shape[1]
+            weights = self.decomp(self.n_objectives)
 
         stop = False
         iteration = 0
@@ -132,9 +138,9 @@ class Moead:
         # 2. Define or update neighborhoods
             neighb: np.ndarray = None
             if self.neighborhood.mode == "weights":
-                neighb = self.neighborhood(weights, iter)
+                neighb = self.neighborhood(weights, iteration)
             else:
-                neighb = self.neighborhood(population, iter)
+                neighb = self.neighborhood(population, iteration)
         # 3. Copy the incumbent solution in preparation for the new one
             new_population = np.array(population)
         # 4. Variation operators
@@ -151,7 +157,7 @@ class Moead:
             min_points = np.min(combined_eva, axis=0)  # ideal points
             max_points = np.max(combined_eva, axis=0)  # nadir points
 
-            flattened_neighborhood_ind = neighb.flatten() # len = neigh.shape[0] * neigh.shape[1]
+            flattened_neighborhood_ind = neighb.flatten() # len = neigh.shape[1] * neigh.shape[0]
             neighborhood_evaluations = new_eva[flattened_neighborhood_ind]
             # Replicate each weight vector T (neighborhood size) times
             replicated_weights = np.repeat(weights, neighb.shape[1], axis=0)

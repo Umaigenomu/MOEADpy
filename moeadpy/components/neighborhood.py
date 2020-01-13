@@ -48,7 +48,7 @@ class TNearestNeighbors(Neighborhood):
             return i
 
     def get_neighbor_probability_matrix(self):
-        if self.neighbor_prob:
+        if self.neighbor_prob is not None:
             return self.neighbor_prob
         pop_size = self.neighbors.shape[0]
         self.neighbor_prob = np.array([

@@ -1,5 +1,5 @@
 import numpy as np
-from . import Component, neighboorhood
+from . import Component, neighborhood
 
 # Every variator/localsearch class in this file must inherit this (composite pattern)
 class SingleItemIterator(Component):
@@ -74,7 +74,7 @@ class SimulatedBinaryCrossover(Crossover):
         return recomb_neighs_0, recomb_neighs_1
 
 
-    def __call__(self, population: np.ndarray, neighbors: neighboorhood.Neighborhood):
+    def __call__(self, population: np.ndarray, neighbors: neighborhood.Neighborhood):
         if not self.use_prob_matrix:
             for i in range(population.shape[0]):
                 n1 = neighbors.get_neighbor(i)

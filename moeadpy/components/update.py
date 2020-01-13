@@ -8,9 +8,9 @@ class StandardUpdate(Component):
         next_pop = np.array([new_pop[neighb[i, best_ind[i]]] 
                                 if best_ind[i] < neighb.shape[1]
                                 else old_pop[i] 
-                                for i in new_pop.shape[0]])
+                                for i in range(new_pop.shape[0])])
         next_eval = np.array([new_eval[neighb[i, best_ind[i]]] 
                                 if best_ind[i] < neighb.shape[1]
                                 else old_eval[i] 
-                                for i in new_eval.shape[0]])
+                                for i in range(new_eval.shape[0])])
         return next_pop, next_eval
