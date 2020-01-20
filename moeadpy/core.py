@@ -124,11 +124,11 @@ class Moead:
         self._set_lower_upper_limits(population_size)
         population = np.random.rand(population_size, self.solution_length)
 
-        new_eva = self.evaluate_solutions(population, self.constraint)
-        if new_eva.shape[1] != self.n_objectives:
+        eva = self.evaluate_solutions(population, self.constraint)
+        if eva.shape[1] != self.n_objectives:
             logging.warn(f"User defined 'n_objectives' and the actual number of objectives inferred from the problem "
                           "differ. Changing n_objectives to {new_eva.shape[1]} and regenerating weights.")
-            self.n_objectives = new_eva.shape[1]
+            self.n_objectives = eva.shape[1]
             weights = self.decomp(self.n_objectives)
 
         stop = False
@@ -150,15 +150,15 @@ class Moead:
                 else:
                     new_population = variator(new_population)
         # 5. Re-evaluation and scalar aggregation functions
-            old_eva = new_eva
-            new_eva = self.evaluate_solutions(new_population)
-            combined_eva = np.concatenate((old_eva, new_eva), axis=0)
+            old_eva = eva
+            eva = self.evaluate_solutions(new_population)
+            combined_eva = np.concatenate((old_eva, eva), axis=0)
 
             min_points = np.min(combined_eva, axis=0)  # ideal points
             max_points = np.max(combined_eva, axis=0)  # nadir points
 
             flattened_neighborhood_ind = neighb.flatten() # len = neigh.shape[1] * neigh.shape[0]
-            neighborhood_evaluations = new_eva[flattened_neighborhood_ind]
+            neighborhood_evaluations = eva[flattened_neighborhood_ind]
             # Replicate each weight vector T (neighborhood size) times
             replicated_weights = np.repeat(weights, neighb.shape[1], axis=0)
             # neighborhood_evaluations.shape == replicated_weights.shape
@@ -166,14 +166,14 @@ class Moead:
             Z_neigh = self.scalarization(neighborhood_evaluations, replicated_weights, min_points, max_points)
             Z_neigh = Z_neigh.reshape((neighb.shape[0], neighb.shape[1]))
             Z_old_eva = self.scalarization(old_eva, weights, min_points, max_points)  # len = neighb.shape[0]
-            Z_old_eva = Z_old_eva.reshape((1, len(Z_old_eva))).T
+            Z_old_eva = Z_old_eva.reshape((1, Z_old_eva.shape[0])).T
             # Z_full.shape = (neighb.shape[0], neighb.shape[1] + 1)
             # => coefficients for all the evaluation matrices made above
             Z_full = np.concatenate((Z_neigh, Z_old_eva), axis=1)
         # 6. Constraints and index ordering
             Z_sort_ind = np.argsort(Z_full, axis=1)  # shape's the same as Z_full; indexes
         # 7. Update
-            population, eva = self.update(new_population, population, new_eva, old_eva, neighb, Z_sort_ind) 
+            population, eva = self.update(new_population, population, eva, old_eva, neighb, Z_sort_ind)
         # 8. Termination check
             stop = self.stop_criteria(iteration)
         self.results = population, eva

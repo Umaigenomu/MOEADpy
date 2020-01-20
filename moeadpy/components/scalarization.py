@@ -22,3 +22,16 @@ class WeightedTchebycheff(Scalarization):
         min_p_matrix = np.tile(min_points, (evaluations.shape[0], 1))
         weighted_scaled_eva = weights * (evaluations - min_p_matrix + self.eps)
         return np.max(weighted_scaled_eva, axis=1)
+
+
+class WeightedSum(Scalarization):
+    def __init__(self, eps=1/10**16):
+        self.eps = eps
+
+    def __call__(self, evaluations: np.ndarray, weights: np.ndarray, min_points: np.ndarray, *args):
+        '''
+        return: 1D ndarray the length of evaluations.shape[0]
+        '''
+        min_p_matrix = np.tile(min_points, (evaluations.shape[0], 1))
+        weighted_scaled_eva = weights * (evaluations - min_p_matrix + self.eps)
+        return np.sum(weighted_scaled_eva, axis=1)

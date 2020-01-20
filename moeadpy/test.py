@@ -1,10 +1,11 @@
 import unittest
 import core
 import numpy as np
-from components import neighborhood, stopping, decomposition
+from components import neighborhood, stopping, decomposition, scalarization
 import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('Agg')
+np.set_printoptions(threshold=np.inf)
 
 
 
@@ -21,26 +22,33 @@ def plot_front(evaluations):
     length = evaluations.shape[0]
     plt.figure()
     plt.scatter(evaluations[:, 0].reshape(length), evaluations[:, 1].reshape(length))
-    # plt.xlim(0, 1)
-    # plt.ylim(0, 1)
+    plt.xlim(0, np.max(evaluations[:, 0]))
+    plt.ylim(0, np.max(evaluations[:, 1]))
     plt.savefig("test.png")
     plt.close()
 
 class TestMainClass(unittest.TestCase):
 
-    def test_run(self):
-        m = core.Moead(zd1, 2, np.zeros(10), np.ones(10),
-                       decomp=decomposition.Sld(h=99),
-                       neighborhood=neighborhood.TNearestNeighbors(T=20, delta_prob=0.85),
-                       seed=10,
+    @unittest.skip("Unnecessary")
+    def test_original(self):
+        m = core.Moead(zd1, 2, np.zeros(30), np.ones(30),
+                       seed=None,
                        stop_criteria=stopping.MaxIter(200))
         m.compute()
-        print(
-            m.results[0]
-        )
-        print(
-            m.results[1]
-        )
+        print(m.results[0].round(2))
+        print(m.results[1].round(2))
+        plot_front(m.results[1])
+    
+    # @unittest.skip("")
+    def test_variations(self):
+        m = core.Moead(zd1, 2, np.zeros(30), np.ones(30),
+                       decomp=decomposition.Sld(h=99),
+                       scalarization=scalarization.WeightedTchebycheff(),
+                       seed=24,
+                       stop_criteria=stopping.MaxIter(600))
+        m.compute()
+        print(m.results[0].round(2))
+        print(m.results[1].round(2))
         plot_front(m.results[1])
 
 
