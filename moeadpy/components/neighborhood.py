@@ -22,13 +22,17 @@ class TNearestNeighbors(Neighborhood):
             raise ValueError(
                 "TNearestNeighbors's 'mode' attribute only"
                 " accepts the following values: 'weights', 'solutions'")
+        self.weight_dna = None
         self.neighbors = None
         self.neighbor_sets = None
         self.neighbor_prob = None
 
-    def __call__(self, data: np.ndarray, iteration: int) -> np.ndarray:
-        if self.mode == "weights" and iteration > 1:
-            return self.neighbors
+    def __call__(self, data: np.ndarray) -> np.ndarray:
+        if self.mode == "weights":
+            new_dna = np.sum(data[:, 0])
+            if self.weight_dna == new_dna:
+                return self.neighbors
+            self.weight_dna = new_dna
 
         nbr_indexes = NearestNeighbors(n_neighbors=self.T, n_jobs=-1)\
             .fit(data)\

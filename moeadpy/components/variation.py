@@ -1,18 +1,5 @@
 import numpy as np
-from . import Component, neighborhood
-
-# Every variator/localsearch class in this file must inherit this (composite pattern)
-class SingleItemIterator(Component):
-    def __iter__(self):
-        self.iterated = False
-        return self
-
-    def __next__(self):
-        if not self.iterated:
-            self.iterated = True
-            return self
-        else:
-            raise StopIteration
+from . import Component, neighborhood, SingleItemIterator
 
 
 class Crossover(SingleItemIterator):
